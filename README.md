@@ -38,16 +38,20 @@ Now you need to launch the camera_driver file
 ```
 roslaunch royale_in_ros camera_driver.launch 
 ```
+![pointcloud](https://github.com/KarthikMothiki/rl_dp_5_pcl/assets/62557178/0cd7e590-89d3-403b-902f-25c3b65f7a66)
 
 Run the pixel2pcl node to segment the point cloud
 ```
 rosrun rl_dp_5_pcl pixel2pcl.py 
 ```
+![seg_pc](https://github.com/KarthikMothiki/rl_dp_5_pcl/assets/62557178/1f3d7630-2f99-44d8-9308-a07c38fa0096)
 
 Run the compute_normals node to compute the normals and visualize them as Marker Array
 ```
 rosrun rl_dp_5_pcl compute_normals.py
 ```
+![normals](https://github.com/KarthikMothiki/rl_dp_5_pcl/assets/62557178/e92a4367-c1b9-4811-b5a1-95719670e350)
+
 
 
 
