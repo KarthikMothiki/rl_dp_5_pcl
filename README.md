@@ -12,11 +12,11 @@ This ROS package provides support for the PMD Flexx2, Time-of-Flight (TOF) senso
 
 2. Launch Files:
 
-    camera_driver.launch: Launch file to start the TOF sensor node and configure its parameters.
+    - camera_driver.launch: Launch file to start the TOF sensor node and configure its parameters.
 
 3. Rviz Config:
 
-    scene.rviz: RViz configuration file pre-set for visualizing the TOF sensor data with the Royale Control panel, Image, PointCloud2 types added. The rviz file is located in rl_dp_5_moveit/rviz/scene.rviz
+    - scene.rviz: RViz configuration file pre-set for visualizing the TOF sensor data with the Royale Control panel, Image, PointCloud2 types added. The rviz file is located in rl_dp_5_moveit/rviz/scene.rviz
 
 
 ### Using the Package:
