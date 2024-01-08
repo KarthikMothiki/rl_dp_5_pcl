@@ -4,44 +4,57 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
 import numpy as np
+from sensor_msgs.msg import JointState
+from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
+from std_msgs.msg import Float64MultiArray
 import tf.transformations as tf_trans
 
 # Global publisher for markers
 global marker_pub
 
-def visualize_normals(tangent_vectors, point_array):
+def visualize_normals(normal_vectors, point_array):
     """
     Visualizes normals as markers in Rviz.
 
     Args:
-        tangent_vectors (numpy.ndarray): Array of tangent vectors representing normals.
+        normal_vectors (numpy.ndarray): Array of tangent vectors representing normals.
         point_array (numpy.ndarray): Array of 3D points corresponding to the point cloud.
 
     Returns:
         None
+
+    Frame:
+        Setting the frame to royale_camera_0_optical_frame is important because, 
+        similar to our robot's TF, royale_camera_0_optical_frame is base_link and royale_camera_link is the world frame
     """
+    display_trajectory = DisplayTrajectory()
+    robot_trajectory = RobotTrajectory()
+    robot_trajectory.joint_trajectory.points = normal_vectors
+    display_trajectory.trajectory.append(robot_trajectory)
     marker_array = MarkerArray()
 
     for i in range(len(point_array)):
         normal_marker = Marker()
-        normal_marker.header.frame_id = "royale_camera_link"
+        normal_marker.header.frame_id = "royale_camera_0_optical_frame"
         normal_marker.header.stamp = rospy.Time.now()
         normal_marker.id = i
-        normal_marker.type = Marker.SPHERE
+        normal_marker.type = Marker.ARROW
         normal_marker.action = Marker.ADD
 
         position_np = point_array[i]
-        normal_np = tangent_vectors[i]
+        normal_np = normal_vectors[i]
 
         normal_marker.pose.position.x = position_np[0]
         normal_marker.pose.position.y = position_np[1]
         normal_marker.pose.position.z = position_np[2]
 
+        # print(f"Marker_{i} position: \n{normal_marker.pose.position}")
+
         # Check for zero-length tangent vectors before normalization
         if np.linalg.norm(normal_np) != 0:
             normal_np /= np.linalg.norm(normal_np)
 
-            z_axis_local = -1 * normal_np
+            z_axis_local = 1 * normal_np
             y_axis_global = np.array([0, 1, 0]).astype(float)
             x_axis_local = np.cross(z_axis_local, y_axis_global).astype(float)
             y_axis_local = np.cross(z_axis_local, x_axis_local).astype(float)
@@ -64,8 +77,8 @@ def visualize_normals(tangent_vectors, point_array):
             normal_marker.pose.orientation.w = 1.0
 
         normal_marker.scale.x = 0.01
-        normal_marker.scale.y = 0.01
-        normal_marker.scale.z = 0.01
+        normal_marker.scale.y = 0.001
+        normal_marker.scale.z = 0.001
         normal_marker.color.a = 1.0
         normal_marker.color.r = 1.0
         normal_marker.color.g = 1.0
@@ -87,22 +100,22 @@ def compute_normals(points):
 
     Description:
         - The function compute_normals takes an array of 3D points (points) as input.
-        - 'tangent_vectors' is calculated by taking the difference between consecutive points. 
+        - 'normal_vectors' is calculated by taking the difference between consecutive points. 
         - np.roll is used to shift the array by one position to get the differences. 
         - This is a numerical approximation of the derivative of the points, representing tangent vectors along the curve.
         - Special handling is applied to the first and last points to ensure that tangent vectors are computed properly.
     """
     # Compute tangent vectors
-    tangent_vectors = np.roll(points, shift=-1, axis=0) - np.roll(points, shift=1, axis=0)
-    tangent_vectors[0] = points[1] - points[0]
-    tangent_vectors[-1] = points[-1] - points[-2]
+    normal_vectors = np.roll(points, shift=-1, axis=0) - np.roll(points, shift=1, axis=0)
+    normal_vectors[0] = points[1] - points[0]
+    normal_vectors[-1] = points[-1] - points[-2]
 
     # Normalize tangent vectors to get normals
-    for i in range(len(tangent_vectors)):
-        if np.linalg.norm(tangent_vectors[i]) != 0:
-            tangent_vectors[i] /= np.linalg.norm(tangent_vectors[i])
+    for i in range(len(normal_vectors)):
+        if np.linalg.norm(normal_vectors[i]) != 0:
+            normal_vectors[i] /= np.linalg.norm(normal_vectors[i])
 
-    return tangent_vectors
+    return normal_vectors
 
 def point_cloud_callback(cloud_msg):
     """
@@ -118,17 +131,29 @@ def point_cloud_callback(cloud_msg):
         points = points.reshape(-1, 3)
 
     # Compute tangent vectors
-    tangent_vectors = compute_normals(points)
+    normal_vectors = compute_normals(points)
+    # print(f"Normal Vectors: \n{normal_vectors}")
 
-    print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {tangent_vectors.shape}")
+    # print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {normal_vectors.shape}")
 
-    visualize_normals(tangent_vectors, points)
+    visualize_normals(normal_vectors, points)
+
+    for joint_position in normal_vectors:
+            # Create a Float64MultiArray message
+            msg = Float64MultiArray(data=joint_position.tolist())
+
+            # Publish the message
+            pos_pub.publish(msg)
+
 
 def main():
-    global marker_pub
+    global marker_pub, pos_pub
     rospy.init_node('visualize_normals', anonymous=True)
 
     marker_pub = rospy.Publisher('/normals_markers', MarkerArray, queue_size=1)
+
+    pos_pub = rospy.Publisher('/joint_positions_data', Float64MultiArray, queue_size=1)
+
 
     rospy.Subscriber('/royale_cam0/segmented_point_cloud', PointCloud2, point_cloud_callback)
 

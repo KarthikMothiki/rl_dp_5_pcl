@@ -32,8 +32,13 @@ def image_callback(msg):
     try:
         cv_image = bridge.imgmsg_to_cv2(msg, desired_encoding="mono16")
         img = cv2.convertScaleAbs(cv_image)
+
+        # Uncomment the following lines to get corner points from the image
+        # cv2.imshow('Image', img)
+        # cv2.waitKey(1)
+
         # Hardcoded example of sorted corner points
-        sorted_points = [[91, 48], [145, 50], [89, 106], [142, 108]]
+        sorted_points = [[93, 54], [145, 54], [92, 108], [143, 111]]
     
     except Exception as e:
         print(e)
@@ -98,6 +103,7 @@ def point_cloud_callback(msg):
         if msg is not None:
             segmented_point_cloud = extract_roi_from_point_cloud(msg, sorted_points)
             publish_segmented_point_cloud(segmented_point_cloud)
+            # publish_segmented_point_cloud(msg)
 
     except Exception as e:
         print(e)
@@ -138,7 +144,7 @@ def publish_segmented_point_cloud(segmented_point_cloud):
     """
     header = Header()
     header.stamp = rospy.Time.now()
-    header.frame_id = 'royale_camera_link'
+    header.frame_id = 'royale_camera_0_optical_frame'
 
     cloud_msg = pc2.create_cloud_xyz32(header, segmented_point_cloud)
     pub_segmented_point_cloud.publish(cloud_msg)
