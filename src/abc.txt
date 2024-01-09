@@ -920,3 +920,143 @@ class ImageProcessor:
         gray[res[:,1],res[:,0]]=[0,0,255]
         gray[res[:,3],res[:,2]] = [0,255,0]
         cv.imwrite('subpixel5.png', gray)
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+#!/usr/bin/env python3
+import rospy
+import moveit_commander
+import moveit_msgs.msg
+import numpy as np
+from sklearn.neighbors import KDTree
+from geometry_msgs.msg import Pose, TransformStamped
+import moveit_msgs.msg
+import geometry_msgs.msg
+from std_msgs.msg import Int32MultiArray
+# ... (other imports)
+
+# Function to visualize a trajectory using markers
+def visualize_trajectory(waypoints, r, g, b):
+    """
+    Visualizes a trajectory using markers.
+
+    Parameters:
+        waypoints (list): List of Pose points representing the trajectory.
+        r (float): Red component of the RGB color.
+        g (float): Green component of the RGB color.
+        b (float): Blue component of the RGB color.
+
+    Returns:
+        marker_array (MarkerArray): Visualization of the trajectory as a MarkerArray.
+    """
+    # ... (function implementation)
+
+# Function to visualize an array of points using markers
+def visualize_array(waypoints, r, g, b):
+    """
+    Visualizes an array of points using markers.
+
+    Parameters:
+        waypoints (list): List of points representing the trajectory.
+        r (float): Red component of the RGB color.
+        g (float): Green component of the RGB color.
+        b (float): Blue component of the RGB color.
+
+    Returns:
+        marker_array (MarkerArray): Visualization of the trajectory as a MarkerArray.
+    """
+    # ... (function implementation)
+
+# Function to calculate Euler angles from the current end-effector pose quaternion
+def euler_from_quaternions():
+    """
+    Calculates Euler angles from the current end-effector pose quaternion.
+
+    Returns:
+        tuple: Tuple (roll, pitch, yaw) representing Euler angles.
+    """
+    # ... (function implementation)
+
+# Function to move the robot to a specified pose goal
+def go_to_pose_goal(pose_goal, i):
+    """
+    Moves the robot to a specified pose goal.
+
+    Parameters:
+        pose_goal (Pose): Target Pose for the end-effector.
+        i (int): Index indicating the position in the trajectory (for logging purposes).
+    """
+    # ... (function implementation)
+
+# Function to flatten a nested list
+def flat(lis):
+    """
+    Flattens a nested list.
+
+    Parameters:
+        lis (list): List to be flattened.
+
+    Returns:
+        list: Flattened list.
+    """
+    # ... (function implementation)
+
+# Function to calculate normals for a list of points
+def calculate_normals(points, point_list, k=20):
+    """
+    Calculates normals for a list of points.
+
+    Parameters:
+        points (array): Point cloud data.
+        point_list (list): List of points for which normals need to be calculated.
+        k (int): Number of neighbors for normal calculation (default is 20).
+
+    Returns:
+        list: List of calculated normals.
+    """
+    # ... (function implementation)
+
+# Function to publish a point cloud to a ROS topic
+def publish_cloud(points1):
+    """
+    Publishes a point cloud to the 'custom_points1' topic.
+
+    Parameters:
+        points1 (array): Point cloud data.
+    """
+    # ... (function implementation)
+
+# Function to display a MoveIt trajectory
+def display_trajectory(plan):
+    """
+    Displays a MoveIt trajectory.
+
+    Parameters:
+        plan (MoveIt plan): MoveIt plan to be displayed.
+    """
+    # ... (function implementation)
+
+# Callback function for processing point cloud data
+def point_cloud_callback(cloud_points):
+    """
+    Callback function for processing point cloud data.
+
+    Parameters:
+        cloud_points (PointCloud2): Point cloud data received from the 'smooth_output' topic.
+    """
+    # ... (function implementation)
+
+# Main function to initialize ROS node and subscribe to point cloud data
+def main():
+    """
+    Main function to initialize ROS node and subscribe to point cloud data.
+    """
+    # ... (function implementation)
+
+if __name__ == "__main__":
+    # Run the main function if the script is executed directly
+    main()
