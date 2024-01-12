@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import rospy
+import sys
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
@@ -7,14 +8,16 @@ from geometry_msgs.msg import Pose, PoseArray, TransformStamped
 import numpy as np
 from sensor_msgs.msg import JointState
 from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
-from std_msgs.msg import Float64MultiArray
-import tf.transformations as tf_trans
+from tf.transformations import quaternion_from_matrix
 import tf2_ros
 import time
-import moveit_commander, moveit_msgs.msg
+import moveit_commander
+import moveit_msgs.msg
 
 
-rospy.init_node('visualize_normals_and_path_planning', anonymous=True)
+## First initialize `moveit_commander`_ and a `rospy`_ node:
+moveit_commander.roscpp_initialize(sys.argv)
+rospy.init_node('generating_custom_trajectory', anonymous=True)
 tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(12))
 tf_listener = tf2_ros.TransformListener(tf_buffer)
 
@@ -26,14 +29,25 @@ robot = moveit_commander.RobotCommander()
 scene = moveit_commander.PlanningSceneInterface()
 
 # Name of the group can be found at the "/home/inspire-0/moveit_igus_ws/src/Moveit_Igus_RL_DP5/rl_dp_5/rl_dp_5_moveit/config/igus_robolink_rl_dp_5.srdf" file
-arm_group = moveit_commander.MoveGroupCommander('rldp5')
+group_name = 'rldp5'
+arm_group = moveit_commander.MoveGroupCommander(group_name)
+
 display_trajectory_publisher = rospy.Publisher("/move_group/display_planned_path", moveit_msgs.msg.DisplayTrajectory, queue_size=20)
+
 planning_frame = arm_group.get_planning_frame()
+print("============ Planning frame: %s" % planning_frame)
+
 arm_group.set_goal_orientation_tolerance(0.1)
 
 # Set the start state of the robot
 arm_group.set_start_state_to_current_state()
 arm_group.set_max_velocity_scaling_factor(0.05)
+
+# Sometimes for debugging it is useful to print the entire state of the robot:
+print("============ Printing robot state")
+# print(robot.get_current_state())
+print("")
+
 start_time = time.time()
 
 # Global publisher for markers
@@ -52,11 +66,6 @@ def visualize_trajectory(waypoints, r, g, b):
     Returns:
         marker_array (MarkerArray): Visualization of the trajectory as a MarkerArray.
     """
-
-    display_trajectory = DisplayTrajectory()
-    robot_trajectory = RobotTrajectory()
-    robot_trajectory.joint_trajectory.points = waypoints
-    display_trajectory.trajectory.append(robot_trajectory)
 
     marker_array = MarkerArray()
     for i, point in enumerate(waypoints):
@@ -100,10 +109,6 @@ def visualize_normals(normal_vectors, point_array):
         Setting the frame to royale_camera_0_optical_frame is important because, 
         similar to our robot's TF, royale_camera_0_optical_frame is base_link and royale_camera_link is the world frame
     """
-    display_trajectory = DisplayTrajectory()
-    robot_trajectory = RobotTrajectory()
-    robot_trajectory.joint_trajectory.points = normal_vectors
-    display_trajectory.trajectory.append(robot_trajectory)
     marker_array = MarkerArray()
 
     for i in range(len(point_array)):
@@ -137,7 +142,7 @@ def visualize_normals(normal_vectors, point_array):
             z_axis_local /= np.linalg.norm(z_axis_local)
 
             rotation_matrix = np.column_stack((x_axis_local, y_axis_local, z_axis_local))
-            quaternion_data = tf_trans.quaternion_from_matrix(np.vstack([np.hstack([rotation_matrix, np.zeros((3, 1))]), [0, 0, 0, 1]]))
+            quaternion_data = quaternion_from_matrix(np.vstack([np.hstack([rotation_matrix, np.zeros((3, 1))]), [0, 0, 0, 1]]))
 
             quaternion_data /= np.linalg.norm(quaternion_data)
 
@@ -195,7 +200,7 @@ def compute_normals(points):
     return normal_vectors
 
 # Function to move the robot to a specified pose goal
-def go_to_pose_goal(pose_goal, i):
+def go_to_pose_goal(pose_goal):
     """
     Moves the robot to a specified pose goal.
 
@@ -204,14 +209,14 @@ def go_to_pose_goal(pose_goal, i):
         i (int): Index indicating the position in the trajectory (for logging purposes).
     """
     arm_group.set_pose_target(pose_goal)
-    rospy.loginfo(f"Planning Trajectory to Pose {i}")
-    plan1=arm_group.plan()
+    # rospy.loginfo(f"Planning Trajectory to Pose {i}")
+    plan=arm_group.plan()
     success = arm_group.go(wait=True)
 
     # rospy.loginfo(f"DONE EXECUTING Planning Trajectory success or failure : {success}")
 
     # current_joints = arm_group.get_current_joint_values()
-    current_joints = arm_group.get_current_pose()
+    current_joints = arm_group.get_current_pose().pose
     # return all_close(pose_goal, current_joints, 0.01)
 
 def display_trajectory(plan):
@@ -249,13 +254,13 @@ def point_cloud_callback(cloud_msg):
         normal_vectors = compute_normals(points)
         # print(f"Normal Vectors: \n{normal_vectors}")
 
-        # print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {normal_vectors.shape}")
+        print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {normal_vectors.shape}")
 
         visualize_normals(normal_vectors, points)
 
         waypoints = []
 
-        for i, normal in enumerate(normal_vectors):
+        for i, (normal, point) in enumerate(zip(normal_vectors, points)):
             z_axis_local = 1 * normal
             y_axis_global = np.array([0, 1, 0]).astype(float)
             x_axis_local = np.cross(z_axis_local, y_axis_global).astype(float)
@@ -264,9 +269,10 @@ def point_cloud_callback(cloud_msg):
             y_axis_local /= np.linalg.norm(y_axis_local)
 
             rotation_matrix = np.column_stack((x_axis_local, y_axis_local, z_axis_local))
-            quaternion_data = tf_trans.quaternion_from_matrix(np.vstack([np.hstack([rotation_matrix, np.zeros((3, 1))]), [0, 0, 0, 1]]))
+            quaternion_data = quaternion_from_matrix(np.vstack([np.hstack([rotation_matrix, np.zeros((3, 1))]), [0, 0, 0, 1]]))
 
-            # quaternion_data /= np.linalg.norm(quaternion_data)
+            quaternion_data /= np.linalg.norm(quaternion_data)
+            # print(f"Quaternion Data: \n{quaternion_data}")
 
             pose_goal =Pose()
             pose_goal.position.x = normal[0]
@@ -278,11 +284,19 @@ def point_cloud_callback(cloud_msg):
             pose_goal.orientation.w = quaternion_data[3]
             waypoints.append(pose_goal)
         
-        # print(f"Shape of way points: {len(waypoints)}")
+        # print(f"Shape of way points: {np.array(waypoints)}")
+        i = 0
+        pos = []
+        orien = []
+        for i, waypoint in enumerate(waypoints):
+            # print(f"Waypoint_{i}: {waypoint}")
+            pos.append(waypoint.position)
+            orien.append(waypoint.orientation)
+
         # print(f"\nWay points: \n{waypoints}\n")
         final_waypoints=np.array(waypoints).reshape(width, height, -1)
         # print(f"SHape: {final_waypoints.shape}")
-        marker_pub = rospy.Publisher('trajectory_markers', MarkerArray, queue_size=1, latch=True)
+        marker_pub_trajectory = rospy.Publisher('trajectory_markers', MarkerArray, queue_size=1, latch=True)
                 
         points_to_be_followed = []   
         box_waypoints = []
@@ -290,44 +304,51 @@ def point_cloud_callback(cloud_msg):
         box_flag = True
 
         # Define box waypoints if required
-        if box_flag:
-            for j in np.arange(0, height, 8):
-                box_waypoints.append(final_waypoints[0, j, 0])            
+        # if box_flag:
+        #     for j in np.arange(0, height, 8):
+        #         box_waypoints.append(final_waypoints[0, j, 0])            
                 
-            for i in np.arange(0, width, 8):
-                box_waypoints.append(final_waypoints[i, height - 1, 0])
+        #     for i in np.arange(0, width, 8):
+        #         box_waypoints.append(final_waypoints[i, height - 1, 0])
 
-            for j in np.arange(0, height, 8)[::-1]:
-                box_waypoints.append(final_waypoints[width - 1, j, 0])
+        #     for j in np.arange(0, height, 8)[::-1]:
+        #         box_waypoints.append(final_waypoints[width - 1, j, 0])
                 
-            for i in np.arange(0, width, 8)[::-1]:
-                box_waypoints.append(final_waypoints[i, 0, 0])
+        #     for i in np.arange(0, width, 8)[::-1]:
+        #         box_waypoints.append(final_waypoints[i, 0, 0])
                 
-            points_to_be_followed = box_waypoints 
+        #     points_to_be_followed = box_waypoints 
+        #     print(f"Shape of points_to_be_followed: {np.array(points_to_be_followed).shape}")
 
         grid_to_be_followed = []   
         toggle = False
 
         # Define grid waypoints if required
         if path_following:
-            for j in np.arange(2, height - 2, 5):
+            for j in np.arange(0, height):
+
                 line_to_be_followed = []
-                for i in np.arange(2, width - 2, 5):
+
+                for i in np.arange(0, width):
                     line_to_be_followed.append(final_waypoints[i, j, 0])
                     points_to_be_followed.append(final_waypoints[i, j, 0])
 
                 if toggle:
                     line_to_be_followed = line_to_be_followed[::-1]
                     toggle = False
+
                 else:
                     toggle = True
                     
                 grid_to_be_followed.append(line_to_be_followed)
+
+        # print(f"Shape of grid_to_be_followed: {np.array(grid_to_be_followed).shape}")
                     
-        marker_array = visualize_trajectory(points_to_be_followed, 1.0, 0.0, 0.0)
-        marker_pub.publish(marker_array)
-        print("len(points_to_be_followed):", len(points_to_be_followed))
-        # print(f"Shape of Points to be followed: {np.array(points_to_be_followed)}")
+        marker_array1 = visualize_trajectory(points_to_be_followed, 1.0, 2.0, 0.0)
+        marker_pub_trajectory.publish(marker_array1)
+        
+        # print("len(grid_to_be_followed):", len(grid_to_be_followed))
+        # print(f"Shape of Points to be followed: {np.array(points_to_be_followed).shape}")
             
         static_transforms = []
         normal_points = points_to_be_followed
@@ -335,42 +356,46 @@ def point_cloud_callback(cloud_msg):
         for i, pose_goal in enumerate(normal_points):
             static_transforms.append({
                 'parent_frame_id': 'royale_camera_0_optical_frame',
+                # 'parent_frame_id': 'world',
                 'child_frame_id': 'frame_{}'.format(i),
                 'translation': [pose_goal.position.x, pose_goal.position.y, pose_goal.position.z],
                 'rotation': [pose_goal.orientation.x, pose_goal.orientation.y, pose_goal.orientation.z, pose_goal.orientation.w]
                 })
 
         # Create a static transform broadcaster
-        static_broadcaster = tf2_ros.StaticTransformBroadcaster()
-        rate = rospy.Rate(10)
-        t_list = []
+        # static_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        # t_list = []
 
-        for static_transform in static_transforms:
-            t = TransformStamped()
-            t.header.stamp = rospy.Time.now()
-            t.header.frame_id = static_transform['parent_frame_id']
-            t.child_frame_id = static_transform['child_frame_id']
-            t.transform.translation.x = static_transform['translation'][0]
-            t.transform.translation.y = static_transform['translation'][1]
-            t.transform.translation.z = static_transform['translation'][2]
-            t.transform.rotation.x = static_transform['rotation'][0]
-            t.transform.rotation.y = static_transform['rotation'][1]
-            t.transform.rotation.z = static_transform['rotation'][2]
-            t.transform.rotation.w = static_transform['rotation'][3]
-            t_list.append(t)
+        # for static_transform in static_transforms:
+        #     t = TransformStamped()
+        #     t.header.stamp = rospy.Time.now()
+        #     t.header.frame_id = static_transform['parent_frame_id']
+        #     t.child_frame_id = static_transform['child_frame_id']
+        #     t.transform.translation.x = static_transform['translation'][0]
+        #     t.transform.translation.y = static_transform['translation'][1]
+        #     t.transform.translation.z = static_transform['translation'][2]
+        #     t.transform.rotation.x = static_transform['rotation'][0]
+        #     t.transform.rotation.y = static_transform['rotation'][1]
+        #     t.transform.rotation.z = static_transform['rotation'][2]
+        #     t.transform.rotation.w = static_transform['rotation'][3]
+        #     t_list.append(t)
 
-        static_broadcaster.sendTransform(t_list)
+        # static_broadcaster.sendTransform(t_list)
 
         print("Change the position if you want")
         input("******Press enter to display start trajectory ********")
 
-        print(f"Shape of box_waypoints: {np.array(box_waypoints).shape}")
+        # print(f"Shape of box_waypoints: {np.array(box_waypoints).shape}")
         # print(f"Shape of grid_to_be_followed: {np.array(grid_to_be_followed).shape}")
 
+        # print("z: ", normal_points[0].position.z)
+
         if box_flag:
-            box_waypoints[0].position.z = box_waypoints[0].position.z + 0.2
+            # for i, normal_point in enumerate(normal_points):
+            #     normal_point.position.z += 0.2
+                # print("ajdfl: ", normal_points[i].position.z)
             (plan, fraction) = arm_group.compute_cartesian_path(
-                [box_waypoints[0]], 0.01, 0  # waypoints to follow  # eef_step
+                normal_points, 0.01, 0  # waypoints to follow  # eef_step
                 )
         else:
             grid_to_be_followed[0][0].position.z = grid_to_be_followed[0][0].position.z + 0.2
@@ -379,12 +404,17 @@ def point_cloud_callback(cloud_msg):
                 [grid_to_be_followed[0][0]], 0.01, 0  # waypoints to follow  # eef_step
                 )
             
+        # print("Plan: ", plan)
+            
         print(f"Grid to be followed: {len(grid_to_be_followed[1])}")
+        print(f"Fraction: {fraction}")
 
-        input("******Press enter to execute trajectory ********")
+        # input("******Press enter to execute trajectory ********")
+        # print(f"normal_points[0]: {normal_points[0]}")
 
+        # for i in range(len(normal_points)):
         if fraction < 0.1:
-            go_to_pose_goal(box_waypoints[0], -1)
+            go_to_pose_goal(normal_points)
         else:
             st = time.time()
 
@@ -407,7 +437,6 @@ def point_cloud_callback(cloud_msg):
             (plan, fraction) = arm_group.compute_cartesian_path(box_waypoints, 0.01, 0, avoid_collisions=True) 
             # waypoints to follow, eef_step, jump_threshold, avoid_collisions = True, path_constraints = None
             display_trajectory(plan)
-            print("Fraction:", fraction)
             input("******Press enter to execute trajectory ********")
             st = time.time()
 
