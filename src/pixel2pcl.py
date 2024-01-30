@@ -38,7 +38,7 @@ def image_callback(msg):
         # cv2.waitKey(1)
 
         # Hardcoded example of sorted corner points
-        sorted_points = [[93, 54], [145, 54], [92, 108], [143, 111]]
+        sorted_points = [[106, 68], [136, 68], [106, 98], [136, 98]]
     
     except Exception as e:
         print(e)
@@ -119,21 +119,17 @@ def extract_roi_from_point_cloud(msg, pix):
     Returns:
         numpy.ndarray: Extracted point cloud within the specified ROI.
     """
-    try:
-        pc_data = np.asarray(list(pc2.read_points(msg, skip_nans=True)))
-        pc_array = pc_data.reshape(172, 224, 3)
+    pc_data = np.asarray(list(pc2.read_points(msg, skip_nans=True)))
+    pc_array = pc_data.reshape(172, 224, 3)
+    x_coords, y_coords = zip(*pix)
+    x_min, x_max = min(x_coords), max(x_coords)
+    y_min, y_max = min(y_coords), max(y_coords)
+    
+    roi_point_cloud = pc_array[y_min:y_max + 1, x_min:x_max + 1, :]
+    # print(f"Size: {roi_point_cloud.shape}")
+    roi_point_cloud = roi_point_cloud.reshape(roi_point_cloud.shape[0] * roi_point_cloud.shape[1], 3)
 
-        x_coords, y_coords = zip(*pix)
-        x_min, x_max = min(x_coords), max(x_coords)
-        y_min, y_max = min(y_coords), max(y_coords)
-
-        roi_point_cloud = pc_array[y_min:y_max + 1, x_min:x_max + 1, :]
-        roi_point_cloud = roi_point_cloud.reshape(roi_point_cloud.shape[0] * roi_point_cloud.shape[1], 3)
-
-        return roi_point_cloud
-
-    except Exception as e:
-        print(f"Error in extract_roi_from_point_cloud: {e}")
+    return roi_point_cloud
 
 def publish_segmented_point_cloud(segmented_point_cloud):
     """
@@ -142,6 +138,7 @@ def publish_segmented_point_cloud(segmented_point_cloud):
     Args:
         segmented_point_cloud (numpy.ndarray): The segmented point cloud data.
     """
+
     header = Header()
     header.stamp = rospy.Time.now()
     header.frame_id = 'royale_camera_0_optical_frame'
@@ -177,8 +174,8 @@ if __name__ == "__main__":
     image_sub = rospy.Subscriber(image_topic, Image, image_callback)
 
     # Subscribe to the depth topic
-    depth_topic = "/royale_cam0/depth_image"
-    depth_sub = rospy.Subscriber(depth_topic, Image, depth_callback)
+    # depth_topic = "/royale_cam0/depth_image"
+    # depth_sub = rospy.Subscriber(depth_topic, Image, depth_callback)
 
     # Subscribe to the point cloud topic
     point_cloud_topic = "/royale_cam0/point_cloud"

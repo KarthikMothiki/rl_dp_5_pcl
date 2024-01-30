@@ -13,8 +13,8 @@
 #include <pcl/search/kdtree.h>
 
 ros::Publisher pub;
-double radius = 0.03; // Default radius for radius search
-int k = 5; // Default number of neighbors for k-nearest neighbor search
+double radius = 0.05; // Default radius for radius search
+int k = 30; // Default number of neighbors for k-nearest neighbor search
 
 /*
  * @brief Callback function to process incoming point cloud data.
@@ -35,6 +35,14 @@ void cloud_cb(const pcl::PCLPointCloud2ConstPtr &input)
 
     // Output datasets
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+
+    // if (xyz->points.size() <= k)
+    // {
+    //     std::cout<<"True";
+    // }
+    // else{
+    //     std::cout << "False\n";
+    // }
 
     if (xyz->points.size() <= k)
     {
@@ -68,7 +76,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub = nh.subscribe("/royale_cam0/segmented_point_cloud", 1, cloud_cb);
 
     // Create a ROS publisher for the output point cloud
-    pub = nh.advertise<pcl::PCLPointCloud2>("/cloud_normals", 1);
+    pub = nh.advertise<pcl::PCLPointCloud2>("/cloud_normals_something", 1);
 
     // Spin
     ros::spin();

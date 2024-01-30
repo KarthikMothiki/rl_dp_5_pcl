@@ -5,7 +5,7 @@ from sklearn.neighbors import NearestNeighbors
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Pose, PoseArray, TransformStamped
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped
 import numpy as np
 from sensor_msgs.msg import JointState
 from moveit_msgs.msg import DisplayTrajectory, RobotTrajectory
@@ -54,50 +54,6 @@ print("============ Printing robot state")
 print("")
 
 start_time = time.time()
-
-# Global publisher for markers
-global marker_pub
-
-def visualize_trajectory(waypoints, r, g, b):
-    """
-    Visualizes a trajectory using markers.
-
-    Parameters:
-        waypoints (list): List of Pose points representing the trajectory.
-        r (float): Red component of the RGB color.
-        g (float): Green component of the RGB color.
-        b (float): Blue component of the RGB color.
-
-    Returns:
-        marker_array (MarkerArray): Visualization of the trajectory as a MarkerArray.
-    """
-
-    marker_array = MarkerArray()
-    for i, point in enumerate(waypoints):
-        marker = Marker()
-        # marker.header.frame_id = "tool_link_ee"
-        marker.header.frame_id = "royale_camera_0_optical_frame"
-        marker.header.stamp = rospy.Time.now()
-        marker.id = i
-        marker.type = Marker.SPHERE
-        marker.action = Marker.ADD
-        marker.pose.position.x = point.position.x
-        marker.pose.position.y = point.position.y
-        marker.pose.position.z = point.position.z
-        marker.pose.orientation.x = point.orientation.x
-        marker.pose.orientation.y = point.orientation.y
-        marker.pose.orientation.z = point.orientation.z
-        marker.pose.orientation.w = point.orientation.w
-        marker.scale.x = 0.001
-        marker.scale.y = 0.001
-        marker.scale.z = 0.001
-        marker.color.a = 1.0
-        marker.color.r = r
-        marker.color.g = g
-        marker.color.b = b
-        marker_array.markers.append(marker)
-        # print(" enumerating at {}".format(i))
-    return marker_array
 
 def visualize_normals(normal_vectors, point_array):
     """
@@ -171,60 +127,51 @@ def visualize_normals(normal_vectors, point_array):
 
     marker_pub.publish(marker_array)
 
-def comp_normals(points):
-    """
-    Computes tangent vectors and normalizes them to obtain normals.
+# Global publisher for markers
+global marker_pub
 
-    Args:
-        points (numpy.ndarray): Array of 3D points.
+def visualize_trajectory(waypoints, r, g, b):
+    """
+    Visualizes a trajectory using markers.
+
+    Parameters:
+        waypoints (list): List of Pose points representing the trajectory.
+        r (float): Red component of the RGB color.
+        g (float): Green component of the RGB color.
+        b (float): Blue component of the RGB color.
 
     Returns:
-        numpy.ndarray: Array of normalized tangent vectors representing normals.
-
-    Description:
-        - The function compute_normals takes an array of 3D points (points) as input.
-        - 'normal_vectors' is calculated by taking the difference between consecutive points. 
-        - np.roll is used to shift the array by one position to get the differences. 
-        - This is a numerical approximation of the derivative of the points, representing tangent vectors along the curve.
-        - Special handling is applied to the first and last points to ensure that tangent vectors are computed properly.
+        marker_array (MarkerArray): Visualization of the trajectory as a MarkerArray.
     """
-    o3d_cloud = o3d.geometry.PointCloud()
-    o3d_cloud.points = o3d.utility.Vector3dVector(points)
+
+    marker_array = MarkerArray()
+    for i, point in enumerate(waypoints):
+        marker = Marker()
+        # marker.header.frame_id = "tool_link_ee"
+        marker.header.frame_id = "royale_camera_0_optical_frame"
+        marker.header.stamp = rospy.Time.now()
+        marker.id = i
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = point.position.x
+        marker.pose.position.y = point.position.y
+        marker.pose.position.z = point.position.z
+        marker.pose.orientation.x = point.orientation.x
+        marker.pose.orientation.y = point.orientation.y
+        marker.pose.orientation.z = point.orientation.z
+        marker.pose.orientation.w = point.orientation.w
+        marker.scale.x = 0.001
+        marker.scale.y = 0.001
+        marker.scale.z = 0.001
+        marker.color.a = 1.0
+        marker.color.r = r
+        marker.color.g = g
+        marker.color.b = b
+        marker_array.markers.append(marker)
+        # print(" enumerating at {}".format(i))
+    return marker_array
 
 
-    # Create an Open3D point cloud
-    o3d_cloud = o3d.geometry.PointCloud()
-    o3d_cloud.points = o3d.utility.Vector3dVector(points[:, :3])
-
-    # Estimate normals using Open3D (CPU version)
-    o3d_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
-
-        # Get the normals as a numpy array
-    selected_pcl_normals = np.asarray(o3d_cloud.normals)
-
-    return selected_pcl_normals
-
-def calc_normals(points, k=20):
-    normals = []
-    neigh = NearestNeighbors(n_neighbors=k)
-    neigh.fit(points)
-    avg_num_neighbors = np.mean([len(neigh.kneighbors([p], return_distance=False)[0]) for p in points])
-
-    for p in points:
-        indices = neigh.kneighbors([p], return_distance=False)[0]
-        # print(indices)
-        # if len(indices) < avg_num_neighbors:
-        #     # Skip points with less than the average number of neighbors
-        #     continue
-        neighbors = points[indices]
-        centroid = np.mean(neighbors, axis=0)
-        covariance_matrix = np.cov(neighbors, rowvar=False)
-        eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
-        normal = eigenvectors[:, np.argmin(eigenvalues)]
-        if np.dot(normal, np.array([1,0,0])) < 0:
-            normal *= 1
-        normals.append(normal)
-    return np.array(normals)
 
 def compute_normals(points, epsilon=1e-3):
     """
@@ -265,36 +212,48 @@ def compute_normals(points, epsilon=1e-3):
         # Numerical differentiation to estimate tangent vector
         tangent_vector = (p2 - p0) / (2 * epsilon)
 
-        # Normalize tangent vector to obtain normal
-        normal = tangent_vector / np.linalg.norm(tangent_vector)
-
-        normals.append(normal)
+        # Check for zero-length tangent vectors before normalization
+        if np.linalg.norm(tangent_vector) != 0:
+            # Normalize tangent vector to obtain normal
+            normal = tangent_vector / np.linalg.norm(tangent_vector)
+            normals.append(normal)
+        else:
+            # If the tangent vector is zero, set an arbitrary normal vector
+            normals.append(np.array([0.0, 0.0, 1.0]))
 
     return np.array(normals)
 
 
+def go_to_joint_state():
+    # Copy class variables to local variables to make the code clearer.
+    joint_goal = JointState()
+    joint_goal.name = ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5']
+    joint_goal.position = [0, 0, np.deg2rad(-90), np.deg2rad(-45), 0]
+
+    try:
+        input("======== Upright Position of the robot is a Singularity, Press enter to move the robot to home position ========")
+        arm_group.go(joint_goal, wait=True)
+        arm_group.stop()
+        print("Moved to home position\n")
+    except moveit_commander.exception.MoveItCommanderException as e:
+        print(f"Error setting joint target: {e}")
+
 # Function to move the robot to a specified pose goal
-def go_to_pose_goal(pose_goal):
+def go_to_pose_goal(waypoint):
     """
     Moves the robot to a specified pose goal.
 
     Parameters:
-        pose_goal (Pose): Target Pose for the end-effector.
-        i (int): Index indicating the position in the trajectory (for logging purposes).
+        waypoint (Pose): The pose goal for the end-effector.
     """
-    for i in range(len(pose_goal)):
-    # print(f"Came into go_to_pose_goal function, values of pose_goal: {len(pose_goal)}")
-        arm_group.set_pose_target(pose_goal[i])
 
-        rospy.loginfo(f"Planning Trajectory to Pose {i}")
-        plan=arm_group.plan()
-        success = arm_group.go(wait=True)
+    arm_group.set_pose_target(waypoint)
 
-        # rospy.loginfo(f"DONE EXECUTING Planning Trajectory success or failure : {success}")
+    success = arm_group.go(wait=True)
+    arm_group.stop()
+    arm_group.clear_pose_targets()
 
-        # current_joints = arm_group.get_current_joint_values()
-        current_joints = arm_group.get_current_pose().pose
-    # return all_close(pose_goal, current_joints, 0.01)
+    rospy.loginfo("Finished executing trajectory.")
 
 def display_trajectory(plan):
     """
@@ -308,6 +267,9 @@ def display_trajectory(plan):
     display_trajectory.trajectory.append(plan)
     # Publish
     display_trajectory_publisher.publish(display_trajectory)
+
+def execute_plan(cartesian_plan):
+    arm_group.execute(cartesian_plan, wait=True)
 
 def point_cloud_callback(cloud_msg):
     """
@@ -325,20 +287,22 @@ def point_cloud_callback(cloud_msg):
 
         # Ensure the array is 2D
         if len(points.shape) == 1:
+            print("Reshaping the Point Cloud np array")
             points = points.reshape(-1, 3)
 
         # Compute tangent vectors
         normal_vectors = compute_normals(points)
-        # print(f"Normal Vectors: \n{normal_vectors}")
 
-        print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {normal_vectors.shape}")
+        # Moving to home position
+        go_to_joint_state()
+
+        print(f"Size of segmented point cloud: {points.shape}\nShape of normals computed: {normal_vectors.shape}\n")
 
         visualize_normals(normal_vectors, points)
 
         waypoints = []
 
         for i, normal in enumerate(normal_vectors):
-            # print(f"Normal vector@{i}: {normal}\nPoint Vector@{i}: {points[i]}")
             z_axis_local = 1 * normal
             y_axis_global = np.array([0, 1, 0]).astype(float)
             x_axis_local = np.cross(z_axis_local, y_axis_global).astype(float)
@@ -350,9 +314,8 @@ def point_cloud_callback(cloud_msg):
             quaternion_data = quaternion_from_matrix(np.vstack([np.hstack([rotation_matrix, np.zeros((3, 1))]), [0, 0, 0, 1]]))
 
             quaternion_data /= np.linalg.norm(quaternion_data)
-            # print(f"Quaternion Data: \n{quaternion_data}")
 
-            pose_goal =Pose()
+            pose_goal = Pose()
             pose_goal.position.x = points[i][0]
             pose_goal.position.y = points[i][1]
             pose_goal.position.z = points[i][2]
@@ -360,36 +323,19 @@ def point_cloud_callback(cloud_msg):
             pose_goal.orientation.y = quaternion_data[1]
             pose_goal.orientation.z = quaternion_data[2]
             pose_goal.orientation.w = quaternion_data[3]
+
+            # print(f"Type of pose_goal: {type(pose_goal)}")
             waypoints.append(pose_goal)
         
+        print(f"First point is : {waypoints[0]}")
         print(f"Shape of way points: {np.array(waypoints).shape}")
 
         # print(f"\nWay points: \n{waypoints}\n")
         final_waypoints=np.array(waypoints).reshape(width, height, -1)
-        # print(f"SHape: {final_waypoints.shape}")
+        # print(f"SHape: {final_waypoints.shape}\nfinal way points: {final_waypoints}")
         marker_pub_trajectory = rospy.Publisher('trajectory_markers', MarkerArray, queue_size=1, latch=True)
                 
         points_to_be_followed = []   
-        box_waypoints = []
-
-        box_flag = False
-
-        # Define box waypoints if required
-        if box_flag:
-            for j in np.arange(0, height, 8):
-                box_waypoints.append(final_waypoints[0, j, 0])            
-                
-            for i in np.arange(0, width, 8):
-                box_waypoints.append(final_waypoints[i, height - 1, 0])
-
-            for j in np.arange(0, height, 8)[::-1]:
-                box_waypoints.append(final_waypoints[width - 1, j, 0])
-                
-            for i in np.arange(0, width, 8)[::-1]:
-                box_waypoints.append(final_waypoints[i, 0, 0])
-                
-            points_to_be_followed = box_waypoints 
-            print(f"Shape of points_to_be_followed: {np.array(points_to_be_followed).shape}")
 
         grid_to_be_followed = []   
         toggle = False
@@ -413,41 +359,42 @@ def point_cloud_callback(cloud_msg):
                     
                 grid_to_be_followed.append(line_to_be_followed)
 
-        print("jafdglo")
-        print(f"Shape of grid_to_be_followed: {np.array(grid_to_be_followed).shape}")
-                    
-        # marker_array1 = visualize_trajectory(points_to_be_followed, 1.0, 2.0, 0.0)
-        # marker_pub_trajectory.publish(marker_array1)
-        
-        # print("len(grid_to_be_followed):", len(grid_to_be_followed))
-        # print(f"Shape of Points to be followed: {np.array(points_to_be_followed)}")
+        way_points_gen = np.array(grid_to_be_followed).reshape(width*height, -1)
             
         static_transforms = []
         normal_points = points_to_be_followed
 
         for i, pose_goal in enumerate(normal_points):
+            translation = [pose_goal.position.x, pose_goal.position.y, pose_goal.position.z]
+            rotation = [pose_goal.orientation.x, pose_goal.orientation.y, pose_goal.orientation.z, pose_goal.orientation.w]
+
             static_transforms.append({
                 'parent_frame_id': 'royale_camera_0_optical_frame',
-                # 'parent_frame_id': 'world',
                 'child_frame_id': 'frame_{}'.format(i),
-                'translation': [pose_goal.position.x, pose_goal.position.y, pose_goal.position.z],
-                'rotation': [pose_goal.orientation.x, pose_goal.orientation.y, pose_goal.orientation.z, pose_goal.orientation.w]
-                })
+                'translation': translation,
+                'rotation': rotation
+            })
 
-        print("Change the position if you want")
         input("******Press enter to display start trajectory ********")
+        marker_array1 = visualize_trajectory(normal_points, 1.0, 2.0, 0.0)
+        marker_pub_trajectory.publish(marker_array1)
 
-        # print(f"Shape of box_waypoints: {np.array(box_waypoints).shape}")
-        # print(f"Shape of grid_to_be_followed: {np.array(grid_to_be_followed).shape}")
+        print(f"Length of points to be followed: {len(list((way_points_gen)))} & type: {type(way_points_gen)}")
 
-        # print("z: ", normal_points[0].position.z)
+        way_points_gen = way_points_gen.tolist()
+
+        
+        for pose in way_points_gen:
+            go_to_pose_goal(pose)
 
         box_flag = True
         if box_flag:
             # for i, normal_point in enumerate(normal_points):
             #     normal_point.position.z += 0.2
                 # print("ajdfl: ", normal_points[i].position.z)
+            print("Computing Cartesian Path")
             (plan, fraction) = arm_group.compute_cartesian_path(points_to_be_followed, 0.01, 0.1)
+            print("Computed Cartesian Path")
 
         else:
             grid_to_be_followed[0][0].position.z = grid_to_be_followed[0][0].position.z + 0.2
@@ -455,18 +402,11 @@ def point_cloud_callback(cloud_msg):
             (plan, fraction) = arm_group.compute_cartesian_path(
                 [grid_to_be_followed[0][0]], 0.01, 0  # waypoints to follow  # eef_step
                 )
-            
-        # print("Plan: ", plan)
-            
-        print(f"Grid to be followed: {len(grid_to_be_followed[1])}")
-        print(f"Fraction: {fraction}")
 
         # input("******Press enter to execute trajectory ********")
-        # print(f"normal_points[0]: {normal_points[0]}")
-
-        # for i in range(len(normal_points)):
         if fraction < 0.1:
-            go_to_pose_goal(normal_points)
+            display_trajectory(plan)
+            execute_plan(plan)
         else:
             st = time.time()
 
@@ -486,7 +426,7 @@ def point_cloud_callback(cloud_msg):
 
         if box_flag:
             print("Display trajectory(cartesian_plan)")
-            (plan, fraction) = arm_group.compute_cartesian_path(box_waypoints, 0.01, 0, avoid_collisions=True) 
+            (plan, fraction) = arm_group.compute_cartesian_path(points_to_be_followed, 0.01, 0, avoid_collisions=True) 
             # waypoints to follow, eef_step, jump_threshold, avoid_collisions = True, path_constraints = None
             display_trajectory(plan)
             input("******Press enter to execute trajectory ********")
@@ -523,7 +463,7 @@ def point_cloud_callback(cloud_msg):
                 robot_trajectory.joint_trajectory = plan.joint_trajectory
                 velocity_scaling_factor = 0.05  # Adjust this value as desired
                 retime_trajectory = arm_group.retime_trajectory(robot.get_current_state(), robot_trajectory, velocity_scaling_factor)
-                print(f"Total time taken after retime: {st - time.time()}")
+                print(f"Total time taken after retime: {st - time.time()}\n")
 
                 arm_group.execute(retime_trajectory, wait=True)
                 arm_group.stop()

@@ -17,7 +17,7 @@ import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import TransformStamped
 from moveit_commander import conversions
-
+import open3d as o3d
 
 try:
     from math import pi
@@ -107,7 +107,33 @@ def visualize_trajectory(plan):
 
     return display_trajectory.trajectory
 
+def calculate_normals(points):
+    # Create an Open3D point cloud
+    o3d_cloud = o3d.geometry.PointCloud()
+    o3d_cloud.points = o3d.utility.Vector3dVector(points[:, :3])
+
+    # Estimate normals using Open3D (CPU version)
+    o3d_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=30))
+
+    # Get the normals as a numpy array
+    normals = np.asarray(o3d_cloud.normals)
+
+    normal_vectors = np.asarray(normals)
+
+    return normal_vectors
+
 def compute_normals(points, epsilon=1e-3):
+    """
+    For each point p1 in the input array:
+      Compute tangent vector: t = (p2 - p0) / (2 * epsilon)
+
+      If ||t|| != 0:
+          Normalize tangent vector to obtain normal vector: n = t / ||t||
+      Else:
+          Set an arbitrary normal vector: n = [0.0, 0.0, 1.0]
+
+    Reference: https://math.libretexts.org/Bookshelves/Calculus/Supplemental_Modules_(Calculus)/Vector_Calculus/2%3A_Vector-Valued_Functions_and_Motion_in_Space/2.4%3A_The_Unit_Tangent_and_the_Unit_Normal_Vectors
+    """
     normals = []
 
     for i in range(len(points)):
@@ -200,11 +226,10 @@ def plan_cartesian_path(waypoints):
 
 def execute_plan(plan):
     # arm_group.set_planner_id("geometric::RRTConnect")
-    arm_group.set_planner_id("RRTConnectkConfigDefault")
+    # arm_group.set_planner_id("RRTConnectkConfigDefault")
     arm_group.set_num_planning_attempts(10)
     arm_group.set_max_velocity_scaling_factor(0.1)
     arm_group.set_goal_tolerance(0.01)
-    arm_group.set_pose_reference_frame("world")
 
     # Replace arm_group.go(plan, wait=True) with arm_group.execute(plan, wait=True)
     try:
@@ -253,7 +278,10 @@ def point_cloud_callback(cloud_msg):
             points = points.reshape(-1, 3)
 
         # Compute tangent vectors
-        normal_vectors = compute_normals(points)
+        normal_vectors = calculate_normals(points)
+            
+        # Compute normals using Open3D
+        # normal_vectors = calculate_normals(points)
 
         # Moving to home position
         # go_to_joint_state()
@@ -327,15 +355,14 @@ def point_cloud_callback(cloud_msg):
 
         flat_list = [item for sublist in waypoints_list for item in sublist]
 
-        # points_to_be_followed = np.array(points_to_be_followed)
-        # points_to_be_followed = points_to_be_followed.reshape(height*width, -1)
+        # print(len(flat_list)) 
             
         static_transforms = []
         normal_points = flat_list
 
         for i, pose_goal in enumerate(normal_points):
             # pose_goal = pose_goal[0]
-            print(pose_goal)
+            # print(pose_goal)
             translation = [pose_goal.position.x, pose_goal.position.y, pose_goal.position.z]
             rotation = [pose_goal.orientation.x, pose_goal.orientation.y, pose_goal.orientation.z, pose_goal.orientation.w]
 
@@ -349,7 +376,7 @@ def point_cloud_callback(cloud_msg):
         # Create a static transform broadcaster
         static_broadcaster = tf2_ros.StaticTransformBroadcaster()
         rate = rospy.Rate(10)
-        t_list=[]
+        t_list=[]   
         for static_transform in static_transforms:
             t = TransformStamped()
             t.header.stamp = rospy.Time.now()
@@ -375,16 +402,30 @@ def point_cloud_callback(cloud_msg):
         #         new_waypoints.append(pose_goal)
                 # go_to_pose_goal(pose_goal)
 
-        for waypoint in normal_points:
-            #  print(len(waypoint))
-             go_to_pose_goal(waypoint)
+        # for waypoint in normal_points:
+        #     #  print(len(waypoint))
+        #      go_to_pose_goal(waypoint)
 
-        # cartesian_plan, fraction = plan_cartesian_path(normal_points)
+        pose1 = Pose()
+        pose1.position.x = 0.1
+        pose1.position.y = 0.0
+        pose1.position.z = 0.0
+        pose1.orientation.x = 0.0
+        pose1.orientation.y = 0.0
+        pose1.orientation.z = 0.0
+        pose1.orientation.w = 1.0
 
-        # # input("******Press enter to display start trajectory ********")
-        # traj = visualize_trajectory(cartesian_plan)
+        arm_group.set_pose_target(pose1)
+        plan1=arm_group.go(wait=True)
 
-        # execute_plan(cartesian_plan)
+        cartesian_plan, fraction = plan_cartesian_path([pose1])
+
+        input("******Press enter to display start trajectory ********")
+        traj = visualize_trajectory(cartesian_plan)
+
+        execute_plan(cartesian_plan)
+
+        
 
     except rospy.ROSInterruptException as e:
          print(f"Exiting with the exception {e}")

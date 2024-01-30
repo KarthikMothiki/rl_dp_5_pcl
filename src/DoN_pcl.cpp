@@ -25,6 +25,8 @@
 
 using namespace pcl;
 
+// Difference of Normals(DoN) Algorithm to segment the point cloud
+
 class PointCloudProcessor {
 public:
     PointCloudProcessor() {
