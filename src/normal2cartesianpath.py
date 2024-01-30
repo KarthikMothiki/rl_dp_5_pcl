@@ -230,6 +230,16 @@ def quaternion_from_normal(normal):
     return quaternion
 
 def go_to_pose_goal(fixed_pose):
+
+    """
+    Move the robot arm to a specified pose.
+
+    Args:
+        fixed_pose: The target pose for the end-effector.
+
+    Returns:
+        None
+    """
     eef = arm_group.get_end_effector_link()
     # print(eef)
     # print(f"in the go to pose goal function: {fixed_pose}")
@@ -319,42 +329,60 @@ def pc_callback(cloud_msg):
     width = 31
 
     try:
+        # Attempt to reshape the waypoints array into a 3D array
         waypoint_list = np.asarray(waypoints).reshape(width, height, -1)
         
     except ValueError as e:
+        # Handle the ValueError if the array cannot be reshaped
         print(f"Error reshaping the array: {e}")
         return
         
+    # Initialize lists to store points and grids to be followed
     points_to_be_followed = []
     grid_to_be_followed = []
+
+    # Initialize toggle variable for grid following
     toggle = False
+
+    # Set path_following flag to control the loop
     path_following = True
-    
+
     if path_following:
+        # Iterate over the height of the waypoint_list
         for j in np.arange(0, height):
+            # Initialize a list to store points in a line to be followed
             line_to_be_followed = []
 
+            # Iterate over the width of the waypoint_list
             for i in np.arange(0, width):
+                # Append the point to the line_to_be_followed list
                 line_to_be_followed.append(waypoint_list[i, j, 0])
+
+                # Append the point to the points_to_be_followed list
                 points_to_be_followed.append(waypoint_list[i, j, 0])
 
+            # Toggle the line_to_be_followed list if necessary
             if toggle:
                 line_to_be_followed = line_to_be_followed[::-1]
                 toggle = False
             else:
                 toggle = True
 
+            # Append the line_to_be_followed list to the grid_to_be_followed list
             grid_to_be_followed.append(line_to_be_followed)
 
     # print(f"Shape of grid_to_be_followed: {np.asarray(grid_to_be_followed).shape}")
     grid = np.asarray(grid_to_be_followed)  
     # points_to_follow = grid.reshape(31*31, -1).tolist()
     
+    # Create static transformations for each pose goal in points_to_be_followed
     static_transforms = []
     for i, pose_goal in enumerate(points_to_be_followed):
+        # Extract translation and rotation components from the pose goal
         translation = [pose_goal.position.x, pose_goal.position.y, pose_goal.position.z]
         rotation = [pose_goal.orientation.x, pose_goal.orientation.y, pose_goal.orientation.z, pose_goal.orientation.w]
 
+        # Construct a static transform dictionary
         static_transforms.append({
             'parent_frame_id': 'royale_camera_0_optical_frame',
             'child_frame_id': 'frame_{}'.format(i),
@@ -362,9 +390,13 @@ def pc_callback(cloud_msg):
             'rotation': rotation
         })
 
+    # Create a TF2 static transform broadcaster
     static_broadcaster = tf2_ros.StaticTransformBroadcaster()
 
+    # Create a list to store TransformStamped messages
     t_list = []
+
+    # Iterate over each static transform and create a TransformStamped message
     for static_transform in static_transforms:
         t = TransformStamped()
         t.header.stamp = rospy.Time.now()
@@ -378,9 +410,12 @@ def pc_callback(cloud_msg):
         t.transform.rotation.z = static_transform['rotation'][2]
         t.transform.rotation.w = static_transform['rotation'][3]
         t_list.append(t)
-    static_broadcaster.sendTransform(t_list)
-    rows, cols = grid.shape
 
+    # Send the list of TransformStamped messages using the static transform broadcaster
+    static_broadcaster.sendTransform(t_list)
+
+    # Extract the shape dimensions from the grid
+    rows, cols = grid.shape
 
     # print(type(points_to_be_followed[0]))
     # ref_frame = 'royale_camera_0_optical_frame'
@@ -423,6 +458,8 @@ def pc_callback(cloud_msg):
     # print(cartesian_plan,"\n\n\n\n")
     disp_trajectory(cartesian_plan)
     arm_group.execute(cartesian_plan, wait=True)
+
+    # Cartesian path planning doesn't work please read this: https://picknik.ai/cartesian%20planners/moveit/motion%20planning/2021/01/07/guide-to-cartesian-planners-in-moveit.html
     
 def compute_cartesion(waypoints):
 
