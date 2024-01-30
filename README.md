@@ -19,6 +19,15 @@ This ROS package provides support for the PMD Flexx2, Time-of-Flight (TOF) senso
 3. Rviz Config:
 
     - scene.rviz: RViz configuration file pre-set for visualizing the TOF sensor data with the Royale Control panel, Image, PointCloud2 types added. The rviz file is located in rl_dp_5_moveit/rviz/scene.rviz
+  
+4. Dependencies: You need the following dependecies to work with this package.'
+   
+   ```
+   pip install numpy
+   pip install scipy
+   pip install scikit-learn
+   pip install open3d
+   ```
 
 
 ### Using the Package:
