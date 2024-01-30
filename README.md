@@ -1,4 +1,4 @@
-![Screenshot from 2024-01-30 12-31-57](https://github.com/KarthikMothiki/rl_dp_5_pcl/assets/62557178/ee4f562a-4609-40c4-83c4-9cf36950ccda)# rl_dp_5_pcl
+# rl_dp_5_pcl
 
 ## PCL ROS Package for the RLDP5
 
@@ -14,6 +14,7 @@ This ROS package provides support for the PMD Flexx2, Time-of-Flight (TOF) senso
 2. Launch Files:
 
     - camera_driver.launch: Launch file to start the TOF sensor node and configure its parameters.
+    - demo.launch: Launch file to use the Motion Planning node
 
 3. Rviz Config:
 
@@ -40,6 +41,7 @@ If you want to see the robot in gazebo as well run the following command
 ```
 roslaunch rl_dp_5_moveit demo_gazebo.launch
 ```
+![Screenshot from 2024-01-30 12-31-57](https://github.com/KarthikMothiki/rl_dp_5_pcl/assets/62557178/ee4f562a-4609-40c4-83c4-9cf36950ccda)
 
 You need to have the libroyale-5.9.0.2568-LINUX-x86-64Bit SDK and copy the sampleROS package in your src.
 Now you need to launch the camera_driver file
